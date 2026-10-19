@@ -20,10 +20,11 @@ finishes the exchange. `halo_exchange_finish!` runs from a `finally` clause if
 the inner launch throws.
 
 By default the partition width is the componentwise maximum of the exchanged
-fields' halo widths. Override it with `boundary_width=(bx, by)` or
-`boundary_width=(bx, by, bz)`. A larger width moves more work before the
-exchange and leaves less work available for overlap; it is a performance-tuning
-parameter and does not change the numerical result. Every width must be
+fields' `overlaps - halowidths` (their halo widths, for default overlaps): the
+depth of the strip that is sent. Override it with `boundary_width=(bx, by)` or
+`boundary_width=(bx, by, bz)`. A width at least that default moves more work
+before the exchange and leaves less work available for overlap without changing
+the result; a smaller width sends cells before the kernel has updated them. Every width must be
 positive and match the dimensionality of `ranges`. If any range length is at
 most twice its width, the macro instead launches the full kernel, executes the
 boundary updates, synchronizes, and performs a blocking `update_halo!`.

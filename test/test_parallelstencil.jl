@@ -50,6 +50,29 @@ function run_tests()
             @test A == B
         end
     end
+    # The sent strip is `overlaps - halowidths` deep, so the default width must
+    # cover it; a width of `halowidths` alone sends stale cells.
+    @testset "2D default width with overlaps > 2*halowidths" begin
+        t = topology((0, 0); periods=(true, true))
+        n, ol = 10, 4
+        g = grid(t, (n, n))
+        f = field(fill(Float64(t.rank), n, n); overlaps=(ol, ol))
+        reference = field(copy(f.data); overlaps=(ol, ol))
+        ranges = (1:n-2, 1:n-2)
+        ext = Base.get_extension(HaloGrids, :HaloGridsParallelStencilExt)
+        @test ext.boundary_width(f) == (ol - 1, ol - 1)
+        @test ext.boundary_width(zeros(n, n)) == (1, 1)
+        for _ in 1:2
+            @parallel ranges increment_owned!(reference.data)
+            @synchronize
+            update_halo!(g, reference)
+            @hide_halo_communication g f begin
+                @parallel ranges increment_owned!(f.data)
+            end
+            @synchronize
+            @test f.data == reference.data
+        end
+    end
 end
 end
 

@@ -142,11 +142,13 @@ The macro expands this into the following schedule:
 6. Launch `update_temperature!` over the inner box.
 7. Finish the exchange in a `finally` clause.
 
-Without `boundary_width=...`, the macro uses the componentwise maximum halo
-width of its fields. This is the smallest naturally inferred safe width. An
-explicit larger value is a tuning parameter: it increases the work completed
-before communication and reduces the inner work available for overlap. It
-does not alter `Field.halowidths`, MPI message sizes, or the computed result.
+Without `boundary_width=...`, the macro uses the componentwise maximum of its
+fields' `overlaps - halowidths` (the halo width, for default overlaps): the
+depth of the strip that is sent. This is the smallest safe width. An explicit
+larger value is a tuning parameter: it increases the work completed before
+communication and reduces the inner work available for overlap. It does not
+alter `Field.halowidths`, MPI message sizes, or the computed result. A smaller
+value sends cells before the kernel has updated them.
 For `(16, 2, 2)`, overlap requires at least 33 points in the x range and at
 least 5 in the y/z ranges. If any range length is at most twice its width,
 the macro runs the full kernel, applies the boundary updates, synchronizes,

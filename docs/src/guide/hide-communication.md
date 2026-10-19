@@ -137,11 +137,14 @@ will send. The inner computation must be independent of the pending receive
 halos, and must not change values that belong to the communication boundary.
 Choose widths that cover the packed interior strips **under your kernel's
 index mapping**. For the simple shifted owned-region mapping above, widths
-at least as large as the field's halo widths cover those strips.
+at least `overlaps - halowidths` (the halo width, for default overlaps) cover
+those strips.
 
 When `boundary_width` is omitted, the macro uses the componentwise maximum
-of the exchanged fields' halo widths. For example, fields with widths `(1, 2)`
-and `(2, 1)` infer `(2, 2)`. An explicit width must contain positive integers
+of the exchanged fields' `overlaps - halowidths`. With default overlaps this
+is the halo width: fields with widths `(1, 2)` and `(2, 1)` infer `(2, 2)`. A
+field with `halowidths=(1, 1)` and `overlaps=(4, 4)` sends cells 3 deep and
+infers `(3, 3)`. An explicit width must contain positive integers
 and match the dimensionality of the launch ranges. The macro checks these
 shape requirements, but it cannot verify kernel dependencies or whether an
 explicit width covers your send strips.
@@ -236,7 +239,8 @@ Use the same local size, rank layout, thread count, and iteration count when
 comparing widths. Warm up kernels and exchanges, compare repeated timings,
 and check the numerical result against a blocking reference. Changing
 `boundary_width` does not change `Field.halowidths`, message sizes, or the
-mathematical pointwise update when the dependency conditions above hold.
+mathematical pointwise update when the dependency conditions above hold and
+the width is at least the inferred default.
 
 Compare with the blocking implementation as well. A pending MPI request
 does not guarantee that transport progresses during Julia computation;

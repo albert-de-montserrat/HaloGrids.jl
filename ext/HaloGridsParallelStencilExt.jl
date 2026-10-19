@@ -3,7 +3,12 @@ module HaloGridsParallelStencilExt
 using HaloGrids
 using ParallelStencil
 
-boundary_width(fields...) = ntuple(d -> maximum(HaloGrids.halowidths(f)[d] for f in fields), ndims(first(fields)))
+# The sent strip ends `overlaps - halowidths` cells into the kernel's range, so the
+# outer slabs must reach that deep before packing (`halowidths` for default overlaps).
+function boundary_width(args...)
+    fields = map(HaloGrids.as_field, args)
+    return ntuple(d -> maximum(HaloGrids.overlaps(f)[d] - HaloGrids.halowidths(f)[d] for f in fields), ndims(first(fields)))
+end
 
 function can_overlap(widths, ranges)
     length(widths) == length(ranges) || throw(ArgumentError("boundary_width must match the dimensionality of ranges"))
