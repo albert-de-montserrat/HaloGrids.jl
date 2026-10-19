@@ -38,6 +38,31 @@ end
     end
 end
 
+@testset "gather! validates on every rank" begin
+    t = topology((0, 0); comm=comm)
+    # The last rank passes a smaller A: every rank must error, none may hang.
+    A = rank == nprocs - 1 && nprocs > 1 ? zeros(2, 3) : zeros(3, 3)
+    A_global = rank == 0 ? zeros(3 .* t.dims) : nothing
+    if nprocs > 1
+        @test_throws ErrorException gather!(A, A_global, t)
+    end
+    # A root-only argument error reaches every rank too.
+    bad_global = rank == 0 ? zeros(1, 1) : nothing
+    @test_throws ErrorException gather!(zeros(3, 3), bad_global, t)
+end
+
+@testset "gather! with ndims(A_global) < ndims(topology)" begin
+    t = topology((nprocs, 1); comm=comm)
+    A = fill(Float64(rank), 3)
+    A_global = rank == 0 ? zeros(3nprocs) : nothing
+    gather!(A, A_global, t)
+    rank == 0 && @test A_global == repeat(0.0:nprocs-1; inner=3)
+    if nprocs > 1
+        t2 = topology((1, nprocs); comm=comm)   # trailing topology dim > 1: rejected
+        @test_throws ErrorException gather!(A, rank == 0 ? zeros(3) : nothing, t2)
+    end
+end
+
 MPI.Barrier(comm)
 rank == 0 && println("test_gather.jl: all tests passed on $nprocs ranks.")
 MPI.Finalize()
