@@ -63,10 +63,11 @@ struct ExchangeHandle{N,F<:Tuple,D<:Tuple}
     dim::Int          # final full-exchange dimension; faces use dims instead
     self_periodic::Bool
     dims::D          # empty for full exchange; pending dimensions for faces
+    epoch::Int       # grid.excache.epoch at start; finish! rejects a stale handle
 end
 
 ExchangeHandle{N,F}(grid, fields, dim, self_periodic) where {N,F} =
-    ExchangeHandle{N,F,Tuple{}}(grid, fields, dim, self_periodic, ())
+    ExchangeHandle{N,F,Tuple{}}(grid, fields, dim, self_periodic, (), grid.excache.epoch)
 
 # Number of elements in the halo slab of field `f` in dimension `dim` (all other
 # dimensions at full size).
@@ -238,9 +239,9 @@ end
     f = fields[1]
     len = halo_length(f, dim)
     # My low halo (slot 1) is filled by my lo-neighbor's *high*-direction send.
-    has_neighbor(lo) && (cache.reqs[i, 1, 1] = MPI.Irecv!(recvbuf(cache, i, 1, eltype(f), len), comm; source=lo, tag=EXCHANGE_TAG_HI))
+    has_neighbor(lo) && MPI.Irecv!(recvbuf(cache, i, 1, eltype(f), len), comm, cache.reqs[i, 1, 1]; source=lo, tag=EXCHANGE_TAG_HI)
     # My high halo (slot 2) is filled by my hi-neighbor's *low*-direction send.
-    has_neighbor(hi) && (cache.reqs[i, 2, 1] = MPI.Irecv!(recvbuf(cache, i, 2, eltype(f), len), comm; source=hi, tag=EXCHANGE_TAG_LO))
+    has_neighbor(hi) && MPI.Irecv!(recvbuf(cache, i, 2, eltype(f), len), comm, cache.reqs[i, 2, 1]; source=hi, tag=EXCHANGE_TAG_LO)
     post_irecv!(cache, Base.tail(fields), dim, lo, hi, comm, i + 1)
     return nothing
 end
@@ -255,12 +256,12 @@ end
     # Slot 1 = my own low-side strip, heading to my lo-neighbor: a low-direction send.
     if has_neighbor(lo)
         stage_send!(cache, i, 1, eltype(f), len, f.data)
-        cache.reqs[i, 1, 2] = MPI.Isend(sendbuf(cache, i, 1, eltype(f), len), comm; dest=lo, tag=EXCHANGE_TAG_LO)
+        MPI.Isend(sendbuf(cache, i, 1, eltype(f), len), comm, cache.reqs[i, 1, 2]; dest=lo, tag=EXCHANGE_TAG_LO)
     end
     # Slot 2 = my own high-side strip, heading to my hi-neighbor: a high-direction send.
     if has_neighbor(hi)
         stage_send!(cache, i, 2, eltype(f), len, f.data)
-        cache.reqs[i, 2, 2] = MPI.Isend(sendbuf(cache, i, 2, eltype(f), len), comm; dest=hi, tag=EXCHANGE_TAG_HI)
+        MPI.Isend(sendbuf(cache, i, 2, eltype(f), len), comm, cache.reqs[i, 2, 2]; dest=hi, tag=EXCHANGE_TAG_HI)
     end
     post_isend!(cache, Base.tail(fields), dim, lo, hi, comm, i + 1)
     return nothing
@@ -289,23 +290,20 @@ function exchange_dim!(g::Grid{N}, fields::Tuple, dim::Integer; overlap::Bool) w
 
     if self_periodic
         copy_self_periodic!(cache, fields, dim, 1)
-        if overlap
-            return ExchangeHandle{N,typeof(fields)}(g, fields, dim, true)
-        else
-            unpack_dim!(g, fields, dim)
-            return ExchangeHandle{N,typeof(fields)}(g, fields, 0, false)
-        end
+        handle = ExchangeHandle{N,typeof(fields)}(g, fields, dim, true)
+        overlap || unpack_dim!(g, fields, dim)
     else
         post_irecv!(cache, fields, dim, lo, hi, g.topology.comm, 1)
         post_isend!(cache, fields, dim, lo, hi, g.topology.comm, 1)
-        if overlap
-            return ExchangeHandle{N,typeof(fields)}(g, fields, dim, false)
-        else
+        handle = ExchangeHandle{N,typeof(fields)}(g, fields, dim, false)
+        if !overlap
             wait_recvs_and_unpack!(g, fields, dim)
             wait_sends!(g, fields, dim)
-            return ExchangeHandle{N,typeof(fields)}(g, fields, 0, false)
         end
     end
+    # Always a handle (only the last dimension's is used): a `Nothing` branch
+    # makes the return type a Union and boxes the handle (measured 256 B/call).
+    return handle
 end
 
 @inline unpack_dim_r!(cache, ::Tuple{}, dim, i) = nothing
@@ -389,11 +387,52 @@ end
     (1 <= d <= N) && dims_in_range(Val(N), Base.tail(dims))
 end
 
+# Runs before `pending` is set, so a bad `dims` (e.g. `(1.0,)`) cannot lock the grid.
 check_dims(::Val{N}, ::Tuple{}) where {N} = error("dims must contain at least one dimension.")
 @inline function check_dims(::Val{N}, dims::Tuple) where {N}
+    dims isa Tuple{Vararg{Integer}} || error("dims must contain integer indices; got dims=$dims.")
     dims_in_range(Val(N), dims) || error("dims must be within 1:$N; got dims=$dims.")
     return nothing
 end
+
+# The sent strips `ol-hw+1:ol` and `n-ol+1:n-ol+hw` hold owned cells only if
+# `overlaps[d] + halowidths[d] <= size(data,d)`; otherwise a rank sends halo
+# cells it has not received yet. Skipped only where no rank communicates
+# (one rank, non-periodic); that test is rank-independent, so every rank errors
+# alike instead of some hanging.
+@inline check_widths(topo, ::Tuple{}, dims) = nothing
+@inline function check_widths(topo, fields::Tuple, dims)
+    check_widths_in_dims(topo, fields[1], dims)
+    check_widths(topo, Base.tail(fields), dims)
+    return nothing
+end
+@inline check_widths_in_dims(topo, f, ::Tuple{}) = nothing
+@inline function check_widths_in_dims(topo, f, dims::Tuple)
+    d = dims[1]
+    topo.dims[d] == 1 && !topo.periods[d] ||
+        f.overlaps[d] + f.halowidths[d] <= size(f.data, d) ||
+        throw_width_error(f.overlaps[d], f.halowidths[d], size(f.data, d), d)
+    check_widths_in_dims(topo, f, Base.tail(dims))
+    return nothing
+end
+# Out of line so the error string does not count against inlining the hot path.
+@noinline throw_width_error(ol, hw, n, d) = error(
+    "exchange in dimension $d needs overlaps[$d] + halowidths[$d] = $(ol + hw) <= size(data,$d) = $n; " *
+    "otherwise the sent strip contains halo cells.")
+
+@inline function begin_exchange!(cache::ExchangeCache)
+    cache.pending = true
+    return cache.epoch += 1
+end
+
+@inline function check_handle(handle::ExchangeHandle)
+    cache = handle.grid.excache
+    cache.pending && handle.epoch == cache.epoch || throw_stale_handle()
+    return nothing
+end
+@noinline throw_stale_handle() = error(
+    "this exchange handle was already finished, or a newer exchange was started on its grid; " *
+    "call halo_exchange_finish! exactly once per halo_exchange_start!.")
 
 """
     halo_exchange_start!(grid::Grid, fields::Field...; dims::Tuple=ntuple(identity, ndims(grid)), region::Symbol=:full) :: ExchangeHandle
@@ -412,12 +451,16 @@ until finish; edges and corners stay unchanged. Use this for axial stencils
 that do not read diagonal halos. Extra trailing field dimensions (such as
 batched components) retain their full extent. Repeated dimensions are rejected
 in face mode. Peers must use the same region, dimensions, and field order.
-Each requested dimension must have at least its halo width of owned cells
-(`3*halowidths[d] <= size(data,d)`).
 Keep input fields unchanged while computing into separate output storage.
 
-Call [`halo_exchange_finish!`](@ref) on the returned handle to complete it.
-[`update_halo!`](@ref) is a convenience wrapper that does both.
+In both modes, every requested dimension `d` of every field must satisfy
+`overlaps[d] + halowidths[d] <= size(data,d)`, so the sent strip holds only
+owned cells (`3*halowidths[d]` with default overlaps). Dimensions with a single
+rank and no periodicity are exempt, since nothing is sent there.
+
+Call [`halo_exchange_finish!`](@ref) exactly once on the returned handle to
+complete it; finishing a handle twice, or a stale handle after a newer start,
+raises an error. [`update_halo!`](@ref) is a convenience wrapper that does both.
 """
 function halo_exchange_start!(grid::Grid{N}, fields::Field...;
         dims::Tuple = ntuple(identity, N), region::Symbol = :full) where {N}
@@ -451,13 +494,10 @@ function _halo_exchange_start!(grid::Grid{N}, fields::Tuple, dims::Tuple) where 
         "(at most one in-flight exchange per Grid is supported; use separate Grids for concurrent exchanges).")
     check_fields(grid, fields)
     check_dims(Val(N), dims)
+    check_widths(grid.topology, fields, dims)
 
-    grid.excache.pending = true
-    handle = exchange_dims!(grid, fields, dims)
-    if handle.dim == 0
-        grid.excache.pending = false
-    end
-    return handle
+    begin_exchange!(grid.excache)
+    return exchange_dims!(grid, fields, dims)
 end
 
 """
@@ -468,15 +508,14 @@ outstanding communication and unpacks it into the fields' arrays. Full exchange
 finishes the last dimension; face exchange finishes all requested dimensions.
 """
 function halo_exchange_finish!(handle::ExchangeHandle{N,F,Tuple{}}) where {N,F}
-    if handle.dim != 0
-        if handle.self_periodic
-            unpack_dim!(handle.grid, handle.fields, handle.dim)
-        else
-            wait_recvs_and_unpack!(handle.grid, handle.fields, handle.dim)
-            wait_sends!(handle.grid, handle.fields, handle.dim)
-        end
-        handle.grid.excache.pending = false
+    check_handle(handle)
+    if handle.self_periodic
+        unpack_dim!(handle.grid, handle.fields, handle.dim)
+    else
+        wait_recvs_and_unpack!(handle.grid, handle.fields, handle.dim)
+        wait_sends!(handle.grid, handle.fields, handle.dim)
     end
+    handle.grid.excache.pending = false
     return nothing
 end
 

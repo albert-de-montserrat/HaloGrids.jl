@@ -168,6 +168,44 @@ end
     halo_exchange_finish!(handle2)
 end
 
+@testset "stale handles, bad dims, and too-small arrays are rejected (region=$region)" for region in (:full, :faces)
+    topo = topology((0, 0); comm=comm, periods=(true, true))
+    g = grid(topo, (6, 6))
+    fA = field(fill(Float64(rank), 6, 6))
+    fB = field(fill(Float64(rank), 6, 6))
+
+    # Double finish, and finishing a stale handle while a newer exchange is
+    # pending, must error and leave the newer exchange intact.
+    h1 = halo_exchange_start!(g, fA; region)
+    halo_exchange_finish!(h1)
+    @test_throws ErrorException halo_exchange_finish!(h1)
+    h2 = halo_exchange_start!(g, fB; region)
+    @test_throws ErrorException halo_exchange_finish!(h1)
+    @test g.excache.pending
+    halo_exchange_finish!(h2)
+    @test !g.excache.pending
+
+    # A non-integer dim errors before the grid is marked pending.
+    @test_throws ErrorException update_halo!(g, fA; dims=(1.0,), region)
+    @test !g.excache.pending
+
+    # overlaps + halowidths > size: the sent strip would contain halo cells.
+    small = field(zeros(6, 6); halowidths=(3, 1))     # 6 + 3 > 6 in dim 1
+    @test_throws ErrorException update_halo!(g, small; dims=(1,), region)
+    update_halo!(g, small; dims=(2,), region)         # dim 2 is fine
+    wide = field(zeros(6, 6); overlaps=(4, 2))        # 4 + 1 <= 6
+    update_halo!(g, wide; region)
+    tight = field(zeros(6, 6); overlaps=(6, 2))       # 6 + 1 > 6
+    @test_throws ErrorException update_halo!(g, tight; region)
+    @test !g.excache.pending
+
+    # No rank communicates in a non-periodic single-rank dimension: no check there.
+    nprocs = MPI.Comm_size(comm)
+    gthin = grid(topology((nprocs, 1); comm=comm, periods=(true, false)), (8, 2))
+    update_halo!(gthin, field(zeros(8, 2)); region)
+    @test !gthin.excache.pending
+end
+
 @testset "periodic dimension split across exactly 2 ranks: direction, not post order, decides which strip fills which halo" begin
     # Regression test for a real bug found 2026-09-13: when a periodic
     # dimension has exactly 2 ranks, `lo` and `hi` (this rank's two neighbors

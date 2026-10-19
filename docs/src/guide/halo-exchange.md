@@ -69,10 +69,12 @@ boundary slabs after finishing, and keep input fields unchanged throughout.
 For larger stencil radii, shrink the inner box accordingly.
 
 Peers must use matching regions, dimensions, field order, types, halo widths,
-and compatible slab sizes. Face mode rejects repeated dimensions and requires
-at least the halo width of owned cells in each requested dimension:
-`3*halowidths[d] <= size(data,d)`. Diagonal stencils and mixed derivatives that
-read edges or corners require `region=:full`. Both modes share the same
+and compatible slab sizes. Face mode rejects repeated dimensions. Both modes
+require `overlaps[d] + halowidths[d] <= size(data,d)` in each requested
+dimension (`3*halowidths[d]` with default overlaps), so the sent strip holds
+only owned cells. Dimensions with a single rank and no periodicity are
+exempt. Diagonal stencils and mixed derivatives that read edges or corners
+require `region=:full`. Both modes share the same
 one-pending-exchange-per-grid guard. More pending dimensions permit broader
 overlap, but do not guarantee that MPI progresses during computation.
 
