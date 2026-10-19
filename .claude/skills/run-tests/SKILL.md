@@ -15,28 +15,28 @@ Run from the repository root. Never wrap `test/runtests.jl` in `mpiexec`.
 | topology, grid, exchange, pack, gather, reduce, coordinates | one MPI file at 2 and 4 ranks, then full driver |
 | `threaded_pack` code | `test_threaded_pack.jl`, `test_face_exchange_threaded.jl` (driver runs them with `-t 4`) |
 | allocation-sensitive hot path | `test_allocations.jl` (CPU), `test_allocations_cuda.jl` (GPU) |
-| HDF5, WriteVTK, CellArrays, ParallelStencil ext | matching file under `--project=test` |
-| CUDA/AMDGPU ext | `test_cuda.jl`, `test_face_exchange_cuda.jl` under `--project=test` |
+| HDF5, WriteVTK, CellArrays, ParallelStencil ext | `Pkg.test()` (the plain driver skips them) |
+| CUDA/AMDGPU ext | `test_cuda.jl`, `test_face_exchange_cuda.jl` via `Pkg.test()` |
 | docs only | no MPI tests; see `update-docs` skill |
 
 ## 2. Commands
 
-One MPI file (change `-n` and file name; use `--project=test` for test-project files):
+One MPI file (change `-n` and file name):
 
 ```sh
 julia --project=. --startup-file=no -e 'using MPI; MPI.mpiexec() do exe; run(`$exe -n 4 $(Base.julia_cmd()) --project=. --startup-file=no test/test_halo_exchange.jl`); end'
 ```
 
-Full driver (1, 2, 4, 8 ranks, plus threaded and test-project files):
+Full driver (1, 2, 4, 8 ranks, plus threaded files; skips weakdep files):
 
 ```sh
 julia --project=. --startup-file=no test/runtests.jl
 ```
 
-Enable test-project and GPU files once:
+Including weakdep and GPU files (installs the root `[targets]` test deps):
 
 ```sh
-julia --project=test --startup-file=no -e 'using Pkg; Pkg.instantiate()'
+julia --project=. --startup-file=no -e 'using Pkg; Pkg.test()'
 ```
 
 ## 3. Report

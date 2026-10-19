@@ -89,11 +89,10 @@ julia --project=. --startup-file=no -e 'using MPI; MPI.mpiexec() do exe; run(`$e
 ```
 
 The driver runs CPU files at 1, 2, 4, 8 ranks. Threaded files run at 1 and 2 ranks
-with `-t 4`. Files that need `test/Project.toml` (GPU, CellArrays, HDF5,
-ParallelStencil, WriteVTK) are skipped with a printed message unless
-`test/Manifest.toml` exists. Run
-`julia --project=test -e 'using Pkg; Pkg.instantiate()'` once to enable them.
-GPU files also skip when no functional GPU is present.
+with `-t 4`. Files that need weakdeps (GPU, CellArrays, HDF5, ParallelStencil,
+WriteVTK) are skipped with a printed message under `julia --project=. test/runtests.jl`.
+Run `julia --project=. -e 'using Pkg; Pkg.test()'` to include them; it installs the
+root `[targets]` test deps. GPU files also skip when no functional GPU is present.
 
 - Use focused tests while developing. Run the full MPI matrix for any change to
   communication, packing, topology, or grid code.

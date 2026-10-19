@@ -15,11 +15,11 @@ Pattern, as used by HDF5 (`src/HDF5IO.jl`, `ext/HaloGridsHDF5Ext.jl`, `src/HDF5E
    above through `joinpath(@__DIR__, "..", "src", "FooExt", ...)`. Add a header
    comment saying what the extension does not do.
 4. **`Project.toml`.** Add the package to `[weakdeps]`, `[extensions]`
-   (`HaloGridsFooExt = "Foo"`), `[compat]`, and `[extras]` with `[targets]` if used.
-5. **`test/Project.toml`.** Add the package under `[deps]`.
-6. **Test file.** Add `test/test_foo.jl`. Register it in `TEST_PROJECT_CPU_FILES`
-   (or `GPU_FILES` with a `functional()` skip) in `test/runtests.jl`.
-7. **Docs.** Add a guide page, register it in `docs/make.jl`, add API entries
+   (`HaloGridsFooExt = "Foo"`), `[compat]`, `[extras]`, and `[targets] test`.
+5. **Test file.** Add `test/test_foo.jl` and extend the name patterns in
+   `plan` (`test/runtests.jl`) so it is marked as needing weakdeps (GPU files
+   also skip themselves with `functional()`).
+6. **Docs.** Add a guide page, register it in `docs/make.jl`, add API entries
    in `docs/src/api.md`.
 
 Rules:

@@ -31,16 +31,18 @@ MPI = "0.20.22"
 MPIPreferences = "0.1.12"
 ParallelStencil = "0.16"
 WriteVTK = "1"
-julia = "1.9"
+julia = "1.10"
 
 [extras]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"
+ReadVTK = "dc215faf-f008-4882-a9f7-a79a826fadc3"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
 [targets]
-test = ["Test", "AMDGPU", "CUDA", "CellArrays", "HDF5", "StaticArrays", "WriteVTK"]
+test = ["Test", "AMDGPU", "CUDA", "CellArrays", "HDF5", "ParallelStencil", "ReadVTK", "StaticArrays", "WriteVTK"]

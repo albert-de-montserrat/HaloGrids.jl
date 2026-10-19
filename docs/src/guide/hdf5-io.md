@@ -97,13 +97,13 @@ using them. HDF5 I/O still requires CPU arrays.
 
 The runnable [`checkpoint_restart.jl`](https://github.com/albert-de-montserrat/HaloGrids.jl/blob/master/examples/checkpoint_restart.jl)
 example saves a position-dependent field and checks every cell after restart.
-From this repository, with the test project instantiated and an MPI launcher
-matching MPI.jl, run:
+From an environment with HaloGrids, MPI and HDF5 (for example `]dev` this
+repository, then `]add MPI HDF5`) and an MPI launcher matching MPI.jl, run:
 
 ```sh
-mpiexec -n 4 julia --project=test examples/checkpoint_restart.jl save state.h5
-mpiexec -n 2 julia --project=test examples/checkpoint_restart.jl load state.h5
-mpiexec -n 8 julia --project=test examples/checkpoint_restart.jl load state.h5
+mpiexec -n 4 julia --project=<env> examples/checkpoint_restart.jl save state.h5
+mpiexec -n 2 julia --project=<env> examples/checkpoint_restart.jl load state.h5
+mpiexec -n 8 julia --project=<env> examples/checkpoint_restart.jl load state.h5
 ```
 
 ## Validation

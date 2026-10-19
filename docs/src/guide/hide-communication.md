@@ -260,13 +260,12 @@ using Markdown
 Markdown.parse("```julia\n" * read(joinpath(@__DIR__, "..", "..", "..", "examples", "parallelstencil_overlap.jl"), String) * "\n```")
 ```
 
-ParallelStencil is an optional dependency, available in this repository's
-test project. Instantiate that project once if needed, then run from the
-repository root:
+ParallelStencil is an optional dependency. From an environment with HaloGrids,
+MPI and ParallelStencil (for example `]dev` this repository, then
+`]add MPI ParallelStencil`), run from the repository root:
 
 ```sh
-julia --project=test -e 'using Pkg; Pkg.instantiate()'
-julia --project=test --startup-file=no examples/parallelstencil_overlap.jl 32 2
+julia --project=<env> --startup-file=no examples/parallelstencil_overlap.jl 32 2
 ```
 
 The arguments are the local side length including halos and the computation
@@ -275,7 +274,7 @@ launch is `4 × 4`, with `4 == 2*2`. Use `32 2` for a split with a `26 × 26`
 inner box. For four MPI ranks, with an MPI launcher available:
 
 ```sh
-mpiexec -n 4 julia --project=test --startup-file=no examples/parallelstencil_overlap.jl 32 2
+mpiexec -n 4 julia --project=<env> --startup-file=no examples/parallelstencil_overlap.jl 32 2
 ```
 
 For an example using the split API directly, see

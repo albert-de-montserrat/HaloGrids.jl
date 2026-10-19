@@ -135,8 +135,8 @@ julia --project=. --startup-file=no test/runtests.jl
 
 The test driver starts MPI subprocesses at 1, 2, 4, and 8 ranks, plus threaded
 packing checks at 1 and 2 ranks with four Julia threads. Run it directly,
-without an outer `mpiexec`. Optional integration tests use `test/Project.toml`
-and report skipped checks when dependencies or usable hardware are unavailable.
+without an outer `mpiexec`. Optional integration tests run under
+`julia --project=. -e 'using Pkg; Pkg.test()'` and report skipped checks when dependencies or usable hardware are unavailable.
 
 The documentation uses Documenter.jl and DocumenterVitepress.jl. Build from the
 repository root:

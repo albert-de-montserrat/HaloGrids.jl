@@ -1,4 +1,4 @@
-# Run with the test project, which includes the optional HDF5 dependency.
+# Run in an environment with HaloGrids, MPI and the optional HDF5 dependency.
 # Save on one rank count, then load the same file on another (see the I/O guide).
 using HaloGrids
 using HDF5
