@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="HaloGrids.jl logo">
+<title>HaloGrids.jl</title>
+<!-- 5x5 array: orange halo ring, teal strip that would be sent to a neighbor, gray interior -->
+  <rect x="1" y="1" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="21" y="1" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="41" y="1" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="61" y="1" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="81" y="1" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="1" y="21" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="21" y="21" width="18" height="18" rx="3" fill="#64b5cd"/>
+  <rect x="41" y="21" width="18" height="18" rx="3" fill="#9fb0bf"/>
+  <rect x="61" y="21" width="18" height="18" rx="3" fill="#9fb0bf"/>
+  <rect x="81" y="21" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="1" y="41" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="21" y="41" width="18" height="18" rx="3" fill="#64b5cd"/>
+  <rect x="41" y="41" width="18" height="18" rx="3" fill="#9fb0bf"/>
+  <rect x="61" y="41" width="18" height="18" rx="3" fill="#9fb0bf"/>
+  <rect x="81" y="41" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="1" y="61" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="21" y="61" width="18" height="18" rx="3" fill="#64b5cd"/>
+  <rect x="41" y="61" width="18" height="18" rx="3" fill="#9fb0bf"/>
+  <rect x="61" y="61" width="18" height="18" rx="3" fill="#9fb0bf"/>
+  <rect x="81" y="61" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="1" y="81" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="21" y="81" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="41" y="81" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="61" y="81" width="18" height="18" rx="3" fill="#eda65a"/>
+  <rect x="81" y="81" width="18" height="18" rx="3" fill="#eda65a"/>
+</svg>
