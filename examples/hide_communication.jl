@@ -1,4 +1,4 @@
-J# Demonstrates hiding the last dimension's halo communication behind
+# Demonstrates hiding the last dimension's halo communication behind
 # independent compute, using one step of 2D five-point-stencil diffusion as
 # the motivating example.
 #
