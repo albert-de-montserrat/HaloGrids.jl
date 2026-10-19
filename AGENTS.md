@@ -18,8 +18,8 @@ Core (`src/`, included in this order by `src/HaloGrids.jl`):
 - `exchange_cache.jl`: byte buffers, MPI requests, `pending` flag, `threaded_pack`.
 - `grid.jl`: `Grid`, local sizes (`nlocal` includes halo), owned cache.
 - `validation.jl`: shape and duplicate-array checks.
-- `backend.jl`: dispatch stubs (`is_cuarray`, `is_rocarray`, `pack_target`,
-  `unpack_source`, `stage_send!`, `stage_recv!`) that extensions override.
+- `backend.jl`: dispatch stubs (`pack_target`, `unpack_source`, `stage_send!`,
+  `stage_recv!`) that extensions override.
 - `halo_exchange.jl`: full exchange, `update_halo!`, split `halo_exchange_start!`/
   `halo_exchange_finish!`, `@hide_halo_communication` (needs ParallelStencil).
 - `face_exchange.jl`: `region=:faces` exchange, separate tag space and buffer slots.
@@ -43,11 +43,12 @@ real code from a same-named `src/*Ext/` directory:
 Other directories:
 
 - `test/`: standalone test files plus the subprocess driver `runtests.jl`.
-  `test/Project.toml` holds weakdeps the root project cannot load.
+  Weakdep tests get their packages from the root `[extras]`/`[targets]`
+  via `Pkg.test()`.
 - `docs/`: Documenter.jl + DocumenterVitepress site. `examples/`: runnable scripts.
-- `benchmarks/`: comparison harness against ImplicitGlobalGrid.jl. Gitignored
-  output, not correctness tests, not run by `test/runtests.jl`.
-- `summary.md`, `visualize.jl` (repo root) are local scratch; leave them alone.
+- `benchmarks/`: comparison harness against ImplicitGlobalGrid.jl. Not
+  correctness tests, not run by `test/runtests.jl`. `benchmarks/results*.csv`
+  are tracked and overwritten by every `run_comparison*.sh` run.
 
 ## Implementation conventions
 
