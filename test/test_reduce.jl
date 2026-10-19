@@ -102,6 +102,26 @@ end
     end
 end
 
+@testset "NaN propagates through global_max/global_min" begin
+    t = topology((0, 0); comm=comm)
+    val = rank == nprocs - 1 ? NaN : 1.0
+    @test isnan(global_max(t, val))
+    @test isnan(global_min(t, val))
+    @test isnan(global_norm(t, [val, 3.0], Inf))
+    @test global_max(t, Float32(rank)) === Float32(nprocs - 1)
+    @test global_min(t, Float64(rank)) === 0.0
+    @test global_max(t, rank) == nprocs - 1
+end
+
+@testset "global_norm matches LinearAlgebra.norm conventions" begin
+    t = topology((0, 0); comm=comm)
+    @test global_norm(t, Int8[100, 0]) ≈ 100 * sqrt(nprocs)    # no Int8 overflow
+    @test global_norm(t, Int32[50_000]) ≈ 50_000 * sqrt(nprocs)
+    @test global_norm(t, [-3.0, Float64(rank + 1)], -Inf) == 1.0
+    @test_throws ArgumentError global_norm(t, [1.0], 0)
+    @test_throws ArgumentError global_norm(t, [1.0], -1)
+end
+
 MPI.Barrier(comm)
 rank == 0 && println("test_reduce.jl: all tests passed on $nprocs ranks.")
 MPI.Finalize()
