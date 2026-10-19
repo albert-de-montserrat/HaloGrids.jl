@@ -2,8 +2,6 @@ import HaloGrids
 import HaloGrids: ExchangeCache, typed_buf!
 using CUDA
 
-HaloGrids.is_cuarray(::AnyCuArray) = true
-
 """
     ViewCache
 

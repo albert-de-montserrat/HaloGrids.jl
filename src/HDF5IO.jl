@@ -17,7 +17,7 @@ This is a stub method: calling it without `HDF5` loaded raises this error
 rather than a bare `MethodError`. Loading `HDF5` (`using HDF5`) resolves the
 call to `HaloGridsHDF5Ext`'s implementation via ordinary multiple dispatch —
 the same "declare a stub in core, add methods from the extension" pattern as
-`is_cuarray`/`is_rocarray` in `backend.jl` — so no `Base.get_extension`
+`pack_target` in `backend.jl` — so no `Base.get_extension`
 lookup is needed at the call site.
 
 See the "MPI/HDF5 file I/O" guide for the on-disk layout, the interior/halo

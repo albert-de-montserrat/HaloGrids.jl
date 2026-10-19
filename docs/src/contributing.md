@@ -80,7 +80,6 @@ package extensions.
 
 ```@docs
 HaloGrids.check_fields
-HaloGrids.is_cuarray
 HaloGrids.pack_target
 ```
 
