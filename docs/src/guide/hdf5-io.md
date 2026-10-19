@@ -144,6 +144,12 @@ was in progress) not every rank observes the identical exception object —
 don't rely on `save_hdf5`/`load_hdf5!` errors being non-fatal on a subset of
 ranks.
 
+With the default `mode="w"`, the file is written as `path * ".tmp"` and rank 0
+renames it to `path` only after every rank has written. A save that is
+killed or fails partway leaves any previous file at `path` intact (and a
+stale `.tmp` beside it). Other modes, such as `"r+"`, write into `path`
+directly, so an interrupted save there can leave blocks unwritten.
+
 ## CPU arrays only
 
 Both functions require every field's array to be a `StridedArray` (`Array`,

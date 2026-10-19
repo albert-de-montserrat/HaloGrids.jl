@@ -24,6 +24,10 @@ See the "MPI/HDF5 file I/O" guide for the on-disk layout, the interior/halo
 storage convention, and why every rank must call this together (there is no
 parallel-HDF5 build to make a true collective write meaningful here, so ranks
 instead take turns under an internal `MPI.Barrier`-synchronized schedule).
+
+With `mode="w"` (the default) the file is written as `path * ".tmp"` and
+renamed to `path` only after every rank has written, so an interrupted save
+leaves any previous file at `path` intact. Other modes write in place.
 """
 save_hdf5(::Grid, ::Union{Field,Tuple}, ::AbstractString; kwargs...) =
     error("save_hdf5 $HDF5EXT_INSTALL_MSG")
