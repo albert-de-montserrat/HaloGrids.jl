@@ -5,8 +5,8 @@
 # directory's metric set (see metrics_common.jl). Rank 0 saves one result
 # record to the JLD2 path in `ARGS[3]`.
 #
-# T_eff: the compute kernel reads {A} and writes {Anew} => n_reads=1,
-# n_writes=1 (field B is exchanged only to match communication volume, per
+# T_eff: the compute kernel reads {A} and writes {Anew} => one read-write pair (A -> Anew),
+# n_readwrite=1, n_readonly=0 (field B is exchanged only to match communication volume, per
 # the CPU worker's own comment — it's not part of the compute kernel, so
 # excluded here too).
 #
@@ -110,7 +110,7 @@ function main()
     CUDA.synchronize()
 
     numel = N * N * N
-    teff = t_eff_gbs(1, 1, numel, sizeof(Float64), stats.time / niter)
+    teff = t_eff_gbs(1, 0, numel, sizeof(Float64), stats.time / niter)
     peakbw = rank == 0 ? measure_peak_bandwidth_gbs() : 0.0
 
     if rank == 0
