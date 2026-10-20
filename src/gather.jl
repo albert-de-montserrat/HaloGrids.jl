@@ -28,7 +28,7 @@ function gather!(A::AbstractArray{T,N2}, A_global::Union{AbstractArray{T,N},Noth
     sz = (ntuple(d -> size(A, d), ND)..., N2)
     # One max-reduction gives max(sz), -min(sz) (as max of -sz) and the root's error flag.
     lims = MPI.Allreduce([sz..., (.-sz)..., root_err === nothing ? 0 : 1], max, comm)
-    lims[1:ND+1] == .-lims[ND+2:2ND+2] || error(
+    all(i -> lims[i] == -lims[ND+1+i], 1:ND+1) || error(
         "gather!: every rank must pass an A of the same size; got sizes between " *
         "$(Tuple(.-lims[ND+2:2ND+1])) and $(Tuple(lims[1:ND])).")
     lims[end] == 0 && return gather_checked!(A, A_global, topology, comm, isroot, root)
