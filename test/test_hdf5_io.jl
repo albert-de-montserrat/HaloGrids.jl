@@ -76,6 +76,7 @@ end
     cleanup!(path)
 
     save_hdf5(g, f, path)
+    @test !isfile(path * ".tmp")   # mode="w" writes to .tmp, then renames
 
     loaded = field(zeros(nlocal...); halowidths = hw)
     load_hdf5!(g, loaded, path)

@@ -97,11 +97,15 @@ function HaloGrids.save_hdf5(grid::HaloGrids.Grid{N}, fields::NTuple{M,HaloGrids
     # otherwise make rank r skip straight past that barrier while every other
     # rank blocks on it forever, waiting for a rank that has already errored
     # out. Every rank raises together instead.
+    # A fresh file ("w") is written under a temporary name and renamed only after
+    # every rank has written, so an interrupted save never truncates the
+    # previous checkpoint or leaves a complete-looking file full of fill values.
+    target = mode == "w" ? path * ".tmp" : path
     for r in 0:(nprocs - 1)
         local_err = nothing
         if rank == r
             try
-                h5open(path, r == 0 ? mode : "r+") do h5
+                h5open(target, r == 0 ? mode : "r+") do h5
                     parent = resolve_group(h5, group, r == 0)
                     for i in 1:M
                         write_field_dataset!(parent, group, grid, fields[i], metas[i], r == 0)
@@ -117,6 +121,19 @@ function HaloGrids.save_hdf5(grid::HaloGrids.Grid{N}, fields::NTuple{M,HaloGrids
             error("save_hdf5 aborted: rank $r failed while writing its turn " *
                   "(see that rank's error output for the underlying cause).")
         end
+    end
+    if target != path
+        rename_err = nothing
+        if rank == 0
+            try
+                mv(target, path; force = true)
+            catch e
+                rename_err = e
+            end
+        end
+        # Also keeps other ranks from returning (and maybe reading `path`) before the rename.
+        MPI.Allreduce(rename_err === nothing ? 0 : 1, +, comm) == 0 ||
+            (rename_err === nothing ? error("save_hdf5: rank 0 failed to rename $target to $path.") : throw(rename_err))
     end
     return path
 end

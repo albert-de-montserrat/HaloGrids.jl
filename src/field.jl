@@ -29,8 +29,6 @@ struct Field{T,N,A<:AbstractArray{T,N}}
     overlaps::NTuple{N,Int}
 end
 
-Field{T,N,A}(data, halowidths) where {T,N,A} = Field{T,N,A}(data, halowidths, 2 .* halowidths)
-
 """
     field(A::AbstractArray; halowidths::NTuple{N,Integer} = ntuple(_->1,N),
           overlaps::NTuple{N,Integer} = 2 .* halowidths) :: Field

@@ -3,16 +3,17 @@
 # include-into-caller's-namespace pattern the gpu/ sibling uses.
 
 # T_eff convention: the standard ParallelStencil.jl-ecosystem "effective
-# memory throughput" metric — A_eff (GB) = (2*n_reads + n_writes) * numel *
+# memory throughput" metric — A_eff (GB) = (2*n_readwrite + n_readonly) * numel *
 # sizeof(T) / 1e9, measured against the *ideal* minimal fused-kernel memory
 # traffic (not the actual traffic of this repo's deliberately non-fused,
 # readable multi-array implementations), T_eff = A_eff / t_step (GB/s).
-# n_reads/n_writes (the number of distinct arrays an ideal single-kernel
-# version of the update would need to read/write once each) is documented at
+# n_readwrite counts arrays an ideal single kernel reads and writes once each
+# (an update A -> Anew counts as one), n_readonly arrays it only reads. Both
+# are documented at
 # each call site, since it requires domain judgement about the specific
 # kernel — see the header comment in each bench_*.jl worker for its count.
-t_eff_gbs(n_reads::Integer, n_writes::Integer, numel::Integer, elemsize::Integer, t_step::Real) =
-    (2 * n_reads + n_writes) * numel * elemsize / 1e9 / t_step
+t_eff_gbs(n_readwrite::Integer, n_readonly::Integer, numel::Integer, elemsize::Integer, t_step::Real) =
+    (2 * n_readwrite + n_readonly) * numel * elemsize / 1e9 / t_step
 
 # Host memory copyto! bandwidth probe: measures *this* machine's realized
 # memory bandwidth directly, so "% of peak" in the results is grounded in an

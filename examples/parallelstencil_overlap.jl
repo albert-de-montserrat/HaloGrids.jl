@@ -1,4 +1,4 @@
-# Run from the repository root with --project=test (contains ParallelStencil).
+# Run from the repository root in an environment with HaloGrids, MPI and ParallelStencil.
 # Arguments: local side length including halos, computation width per side.
 using HaloGrids
 using MPI

@@ -9,7 +9,7 @@
 # `ARGS[3]`.
 #
 # T_eff: this kernel's ideal minimal fused version reads {T, Cp} and writes
-# {T} => n_reads=2, n_writes=1 (see metrics_common.jl for the formula).
+# {T} => n_readwrite=1 (T), n_readonly=1 (Cp) (see metrics_common.jl for the formula).
 #
 # This variant uses HaloGrids' split-phase exchange macro. The outer-region
 # width is inferred from `Tf`'s halo widths; the macro updates that region and
@@ -166,7 +166,7 @@ end
     CUDA.synchronize()
 
     numel = nx * ny * nz
-    teff = t_eff_gbs(2, 1, numel, sizeof(Float64), stats.time / niter)
+    teff = t_eff_gbs(1, 1, numel, sizeof(Float64), stats.time / niter)
     peakbw = rank == 0 ? measure_peak_bandwidth_gbs() : 0.0
 
     if rank == 0

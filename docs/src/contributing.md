@@ -23,7 +23,7 @@ MPI and threaded test driver and the quickstart example. Dependencies are resolv
 from `Project.toml` in each job rather than the development manifest. The CPU
 driver is invoked directly; the CUDA/AMDGPU extensions are implemented and
 tested locally (see the package's `REDESIGN_PLAN.md`) but CI does not install
-their test extras (`test/Project.toml`, gitignored `test/Manifest.toml`) —
+their test extras (the root `[extras]`/`[targets]`, installed by `Pkg.test()`) —
 doing so would add real, un-opted-into time and network cost to every job for
 runners that have no GPU to test against anyway. `test/runtests.jl` detects
 this and prints a one-line skip for the GPU test files rather than failing.
@@ -80,7 +80,6 @@ package extensions.
 
 ```@docs
 HaloGrids.check_fields
-HaloGrids.is_cuarray
 HaloGrids.pack_target
 ```
 

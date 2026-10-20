@@ -17,13 +17,17 @@ This is a stub method: calling it without `HDF5` loaded raises this error
 rather than a bare `MethodError`. Loading `HDF5` (`using HDF5`) resolves the
 call to `HaloGridsHDF5Ext`'s implementation via ordinary multiple dispatch —
 the same "declare a stub in core, add methods from the extension" pattern as
-`is_cuarray`/`is_rocarray` in `backend.jl` — so no `Base.get_extension`
+`pack_target` in `backend.jl` — so no `Base.get_extension`
 lookup is needed at the call site.
 
 See the "MPI/HDF5 file I/O" guide for the on-disk layout, the interior/halo
 storage convention, and why every rank must call this together (there is no
 parallel-HDF5 build to make a true collective write meaningful here, so ranks
 instead take turns under an internal `MPI.Barrier`-synchronized schedule).
+
+With `mode="w"` (the default) the file is written as `path * ".tmp"` and
+renamed to `path` only after every rank has written, so an interrupted save
+leaves any previous file at `path` intact. Other modes write in place.
 """
 save_hdf5(::Grid, ::Union{Field,Tuple}, ::AbstractString; kwargs...) =
     error("save_hdf5 $HDF5EXT_INSTALL_MSG")

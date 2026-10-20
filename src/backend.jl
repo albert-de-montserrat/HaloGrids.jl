@@ -1,22 +1,14 @@
 """
-Stub functions overridden by the CUDA/AMDGPU package extensions (`ext/HaloGridsCUDAExt.jl`,
-`ext/HaloGridsAMDGPUExt.jl`). Resolved via ordinary multiple dispatch on the array
-type — e.g. the CUDA extension adds a method `is_cuarray(::CuArray) = true` — so,
-unlike the old package, no runtime "is the extension loaded" flag is needed at all.
+GPU dispatch seam for pack/unpack and MPI-transport staging, overridden by the
+CUDA/AMDGPU package extensions (`ext/HaloGridsCUDAExt.jl`,
+`ext/HaloGridsAMDGPUExt.jl`) and resolved by ordinary multiple dispatch on the
+array type — a GPU extension adds methods for `AnyCuArray`/`AnyROCArray` and
+nothing else needs to change at the call sites in `halo_exchange.jl`. Unlike
+the old package, no runtime "is the extension loaded" flag is needed at all.
 
 GPU-specific cached state (streams, device buffers) lives behind the `Ref{Any}`
 `gpu_cache` slot owned by the `Grid`'s `ExchangeCache` (see exchange_cache.jl),
 never module-global.
-"""
-is_cuarray(::AbstractArray) = false
-is_rocarray(::AbstractArray) = false
-is_gpuarray(A::AbstractArray) = is_cuarray(A) || is_rocarray(A)
-
-"""
-GPU dispatch seam for pack/unpack and MPI-transport staging, resolved by array
-type exactly like `is_cuarray`/`is_rocarray` above — a GPU extension adds
-methods for `AnyCuArray`/`AnyROCArray` and nothing else needs to change at the
-call sites in `halo_exchange.jl`.
 
 For a plain CPU `AbstractArray`, `pack_target`/`unpack_source` are literally
 `sendbuf`/`recvbuf` (the same host buffer packing has always used) and
