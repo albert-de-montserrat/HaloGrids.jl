@@ -104,6 +104,39 @@ end
 pack!(buf::AbstractVector, A::AbstractArray, ranges::Tuple) = copyto!(buf, view(A, ranges...))
 unpack!(A::AbstractArray, buf::AbstractVector, ranges::Tuple) = copyto!(view(A, ranges...), buf)
 
+# Dense CPU arrays: copy the slab one dim-1 column at a time through raw
+# pointers. The generic `copyto!` above indexes the reinterpreted byte buffer
+# element by element, measured ~9x slower for a contiguous 256x256 Float64 slab.
+pack!(buf::StridedVector{T}, A::Array{T}, ranges::Tuple) where {T} = copy_columns!(buf, A, ranges, true)
+unpack!(A::Array{T}, buf::StridedVector{T}, ranges::Tuple) where {T} = copy_columns!(buf, A, ranges, false)
+
+function copy_columns!(buf::StridedVector{T}, A::Array{T}, ranges::Tuple, topack::Bool) where {T}
+    n = length(ranges[1])
+    i1 = first(ranges[1])
+    cols = CartesianIndices(Base.tail(ranges))
+    length(buf) == n * length(cols) || throw(DimensionMismatch(
+        "buffer length $(length(buf)) does not match slab length $(n * length(cols))."))
+    GC.@preserve buf A begin
+        pb = pointer(buf)
+        li = LinearIndices(A)
+        o = 0
+        @inbounds for I in cols
+            pa = pointer(A, li[i1, Tuple(I)...])
+            if topack
+                @inbounds for k in 1:n
+                    unsafe_store!(pb, unsafe_load(pa, k), o + k)
+                end
+            else
+                @inbounds for k in 1:n
+                    unsafe_store!(pa, unsafe_load(pb, o + k), k)
+                end
+            end
+            o += n
+        end
+    end
+    return nothing
+end
+
 # Below THREADED_PACK_MIN_LEN, `Threads.@spawn` overhead (scheduling latency,
 # plus a real ~500-670B/task allocation measured regardless of chunk size —
 # see "Performance, memory footprint, and GC-pressure goals" in
