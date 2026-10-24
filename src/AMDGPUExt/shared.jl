@@ -2,8 +2,6 @@ import HaloGrids
 import HaloGrids: ExchangeCache, typed_buf!
 using AMDGPU
 
-HaloGrids.is_rocarray(::AnyROCArray) = true
-
 """
     ViewCache
 

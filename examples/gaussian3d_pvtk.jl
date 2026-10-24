@@ -1,4 +1,4 @@
-# Run with the test project, which includes the optional WriteVTK dependency.
+# Run in an environment with HaloGrids, MPI and the optional WriteVTK dependency.
 # Writes a 3D Gaussian bump, distributed across however many MPI ranks the
 # launcher gives it, as a parallel ParaView file set — open the .pvti in
 # ParaView to hand-verify that save_pvtk's halo-inclusive overlap convention

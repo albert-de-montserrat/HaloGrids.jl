@@ -128,11 +128,11 @@ example writes a 3D Gaussian bump, distributed across however many ranks the
 launcher gives it, as a parallel ParaView file set — a good way to
 hand-verify that neighboring ranks' pieces really do stitch into one
 seamless volume, with no gaps or double-counted cells at rank boundaries.
-From this repository, with the test project instantiated and an MPI
-launcher matching MPI.jl, run:
+From an environment with HaloGrids, MPI and WriteVTK (for example `]dev` this
+repository, then `]add MPI WriteVTK`) and an MPI launcher matching MPI.jl, run:
 
 ```sh
-mpiexec -n 8 julia --project=test examples/gaussian3d_pvtk.jl
+mpiexec -n 8 julia --project=<env> examples/gaussian3d_pvtk.jl
 ```
 
 then open the resulting `gaussian3d.pvti` in ParaView.

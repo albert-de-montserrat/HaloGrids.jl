@@ -1,135 +1,43 @@
-# Subprocess-per-test-file driver, mirroring ImplicitGlobalGrid.jl's
-# test/runtests.jl, but explicitly looping an `mpiexec -n N` matrix per file
-# instead of trusting whatever N invoked the driver (test_field.jl needs no
-# MPI ranks at all and is run once, plainly).
-# No `Pkg.activate` here: every test subprocess below gets an explicit
-# `--project`, and `Pkg.test` runs this file in a sandbox where `Pkg` itself is
-# not a dependency (importing it fails with "Package Pkg not found").
+# Runs every test_*.jl file in its own `mpiexec -n N` subprocess, over the rank
+# counts `plan` picks from the file name. Weakdep files (GPU, CellArrays, HDF5,
+# ParallelStencil, WriteVTK) need the root `[targets]` test deps, which only the
+# `Pkg.test()` sandbox has; a plain `julia --project=. test/runtests.jl` (CI)
+# skips them. No `import Pkg`: the Pkg.test sandbox does not have it.
 import MPI
 
-const NPROCS_MATRIX = [1, 2, 4, 8]
-const NO_MPI_FILES = ["test_field.jl"]
-# Needs real OS threads to exercise Threads.@spawn-based packing (see
-# test_threaded_pack.jl); run separately from the rest of the suite with
-# -t 4, over a small nprocs matrix (it isn't testing topology variety, just
-# that the threaded and sequential pack/unpack paths agree).
-const THREADED_FILES = ["test_threaded_pack.jl", "test_face_exchange_threaded.jl"]
-# CUDA/AMDGPU are weakdeps of the package itself (Project.toml), not real
-# dependencies, so a subprocess launched with `--project=<pkg root>` (like
-# every other file below) cannot `using CUDA`/`using AMDGPU` at all. test/
-# has its own Project.toml (CUDA, AMDGPU, CellArrays, MPI, StaticArrays, plus
-# HaloGrids itself as a `[sources]`-path dependency) specifically so these
-# files can; see test_cuda.jl/test_amdgpu.jl, which each skip gracefully via
-# CUDA.functional()/AMDGPU.functional() when no usable GPU is present. Run
-# over a small nprocs matrix, same reasoning as THREADED_FILES: this project
-# has at most one physical GPU to test against, so higher rank counts add
-# process-oversubscription time, not correctness coverage.
-const GPU_FILES = ["test_cuda.jl", "test_amdgpu.jl", "test_cellarrays_cuda.jl", "test_allocations_cuda.jl",
-    "test_face_exchange_cuda.jl", "test_face_exchange_amdgpu.jl", "test_face_exchange_cellarrays_cuda.jl"]
-const GPU_NPROCS_MATRIX = [1, 2]
-# test_cellarrays.jl needs test/'s CellArrays dependency for the same reason
-# (CellArrays is only a weakdep of the package root), but has no GPU-hardware
-# requirement or functional()-style gate, so it runs the same full
-# NPROCS_MATRIX as an ordinary CPU test file — just launched with
-# `--project=test` instead of `--project=<pkg root>`.
-# test_hdf5_io.jl follows the same optional weakdep pattern with a stronger
-# environment gate, because the HDF5 package is a weak dependency of the core
-# package and therefore must be made visible through the test/Project.toml.
-# test_parallelstencil.jl likewise needs the optional ParallelStencil dependency.
-# test_pvtk_io.jl follows the same pattern for the WriteVTK weakdep (plus
-# ReadVTK, a test-only dependency used to verify round-trip correctness —
-# never a package-level weakdep, since save_pvtk has no load_pvtk! counterpart).
-const TEST_PROJECT_CPU_FILES = ["test_cellarrays.jl", "test_hdf5_io.jl", "test_parallelstencil.jl", "test_pvtk_io.jl",
-    "test_face_exchange_cellarrays.jl"]
-
-testdir = @__DIR__
-istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
-testfiles = sort(filter(istest, readdir(testdir; join=true)))
-
-nfail = 0
-printstyled("Testing package HaloGrids.jl\n"; bold=true, color=:white)
-
-exename = joinpath(Sys.BINDIR, Base.julia_exename())
-for f in testfiles
-    if basename(f) in NO_MPI_FILES
-        println("\n-- ", basename(f), " (no MPI) --")
-        try
-            run(`$exename --project=$(joinpath(@__DIR__, "..")) --startup-file=no $f`)
-        catch
-            global nfail += 1
-        end
-        continue
-    end
-    if basename(f) in THREADED_FILES
-        for n in (1, 2)
-            println("\n-- ", basename(f), " -n $n -t 4 --")
-            try
-                MPI.mpiexec() do exe
-                    run(`$exe -n $n $exename --project=$(joinpath(@__DIR__, "..")) --startup-file=no -t 4 $f`)
-                end
-            catch
-                global nfail += 1
-            end
-        end
-        continue
-    end
-    if basename(f) in GPU_FILES
-        # test/Project.toml's own Manifest.toml is gitignored (like the
-        # package root's, only not force-committed the way that one is), so a
-        # fresh checkout/CI runner won't have CUDA/AMDGPU/HaloGrids resolved
-        # there yet. Rather than auto-instantiate here (a real, un-opted-into
-        # time and network cost added to every plain test run/CI job — this
-        # project's CI has so far deliberately stayed CPU-only), skip cleanly
-        # and say so, exactly like a real CUDA.functional()==false skip would.
-        # Run `julia --project=test -e 'using Pkg; Pkg.instantiate()'` once
-        # (from test/) to enable this category locally.
-        if !isfile(joinpath(@__DIR__, "Manifest.toml"))
-            println("\n-- ", basename(f), " (skipped: test/ dependencies not instantiated) --")
-            continue
-        end
-        for n in GPU_NPROCS_MATRIX
-            println("\n-- ", basename(f), " -n $n (test/ project) --")
-            try
-                MPI.mpiexec() do exe
-                    run(`$exe -n $n $exename --project=$(joinpath(@__DIR__)) --startup-file=no $f`)
-                end
-            catch
-                global nfail += 1
-            end
-        end
-        continue
-    end
-    if basename(f) in TEST_PROJECT_CPU_FILES
-        # Same "skip if test/ isn't instantiated" gate as GPU_FILES, but the
-        # full NPROCS_MATRIX and no functional()-style runtime check: this
-        # category exists purely because of the weakdep/real-dep split, not
-        # because of any hardware requirement.
-        if !isfile(joinpath(@__DIR__, "Manifest.toml"))
-            println("\n-- ", basename(f), " (skipped: test/ dependencies not instantiated) --")
-            continue
-        end
-        for n in NPROCS_MATRIX
-            println("\n-- ", basename(f), " -n $n (test/ project) --")
-            try
-                MPI.mpiexec() do exe
-                    run(`$exe -n $n $exename --project=$(joinpath(@__DIR__)) --startup-file=no $f`)
-                end
-            catch
-                global nfail += 1
-            end
-        end
-        continue
-    end
-    for n in NPROCS_MATRIX
-        println("\n-- ", basename(f), " -n $n --")
-        try
-            MPI.mpiexec() do exe
-                run(`$exe -n $n $exename --project=$(joinpath(@__DIR__, "..")) --startup-file=no $f`)
-            end
-        catch
-            global nfail += 1
-        end
-    end
+# (rank counts, extra julia flags, needs weakdeps); rank count 0 means no mpiexec.
+function plan(f)
+    f == "test_field.jl" && return [0], ``, false
+    occursin("threaded", f) && return [1, 2], `-t 4`, false
+    occursin(r"cuda|amdgpu", f) && return [1, 2], ``, true    # one local GPU at most
+    occursin(r"cellarrays|hdf5|parallelstencil|pvtk", f) && return [1, 2, 4, 8], ``, true
+    return [1, 2, 4, 8], ``, false
 end
 
-exit(nfail)
+function runfile(f, n, flags)
+    # julia_cmd keeps Pkg.test's --check-bounds and coverage flags.
+    cmd = `$(Base.julia_cmd()) --project=$(Base.active_project()) --startup-file=no $flags $(joinpath(@__DIR__, f))`
+    n == 0 && return success(pipeline(cmd; stdout, stderr))
+    return MPI.mpiexec(exe -> success(pipeline(`$exe -n $n $cmd`; stdout, stderr)))
+end
+
+function main()
+    has_weakdeps = Base.find_package("CellArrays") !== nothing
+    failed = String[]
+    for f in sort(filter(f -> startswith(f, "test_") && endswith(f, ".jl"), readdir(@__DIR__)))
+        nprocs, flags, weak = plan(f)
+        if weak && !has_weakdeps
+            println("\n-- $f (skipped: needs weakdeps, run via Pkg.test()) --")
+            continue
+        end
+        for n in nprocs
+            label = strip("$f $(n == 0 ? "(no MPI)" : "-n $n") $(join(flags.exec, ' '))")
+            println("\n-- $label --")
+            runfile(f, n, flags) || push!(failed, label)
+        end
+    end
+    isempty(failed) || printstyled("\nFailed runs:\n  ", join(failed, "\n  "), "\n"; color=:red)
+    return length(failed)
+end
+
+exit(main())

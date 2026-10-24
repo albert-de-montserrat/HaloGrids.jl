@@ -97,13 +97,13 @@ using them. HDF5 I/O still requires CPU arrays.
 
 The runnable [`checkpoint_restart.jl`](https://github.com/albert-de-montserrat/HaloGrids.jl/blob/master/examples/checkpoint_restart.jl)
 example saves a position-dependent field and checks every cell after restart.
-From this repository, with the test project instantiated and an MPI launcher
-matching MPI.jl, run:
+From an environment with HaloGrids, MPI and HDF5 (for example `]dev` this
+repository, then `]add MPI HDF5`) and an MPI launcher matching MPI.jl, run:
 
 ```sh
-mpiexec -n 4 julia --project=test examples/checkpoint_restart.jl save state.h5
-mpiexec -n 2 julia --project=test examples/checkpoint_restart.jl load state.h5
-mpiexec -n 8 julia --project=test examples/checkpoint_restart.jl load state.h5
+mpiexec -n 4 julia --project=<env> examples/checkpoint_restart.jl save state.h5
+mpiexec -n 2 julia --project=<env> examples/checkpoint_restart.jl load state.h5
+mpiexec -n 8 julia --project=<env> examples/checkpoint_restart.jl load state.h5
 ```
 
 ## Validation
@@ -143,6 +143,12 @@ failed on every rank together, even though (depending on which rank's turn
 was in progress) not every rank observes the identical exception object —
 don't rely on `save_hdf5`/`load_hdf5!` errors being non-fatal on a subset of
 ranks.
+
+With the default `mode="w"`, the file is written as `path * ".tmp"` and rank 0
+renames it to `path` only after every rank has written. A save that is
+killed or fails partway leaves any previous file at `path` intact (and a
+stale `.tmp` beside it). Other modes, such as `"r+"`, write into `path`
+directly, so an interrupted save there can leave blocks unwritten.
 
 ## CPU arrays only
 

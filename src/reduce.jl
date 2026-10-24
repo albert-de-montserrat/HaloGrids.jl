@@ -48,12 +48,25 @@ global_allreduce(grid::Grid, val, op) = global_allreduce(grid.topology, val, op)
 [`global_allreduce`](@ref) specialized to `+`/`max`/`min` — the common cases
 (a global sum for a conservation check, a global max for a CFL timestep bound
 or a convergence residual, a global min for a stability bound). Every rank
-gets the result. For a reduction only rank `root` needs, or any other
-operator, use [`global_reduce`](@ref)/[`global_allreduce`](@ref) directly.
+gets the result. `global_max`/`global_min` return `NaN` if any rank passes
+`NaN`. For a reduction only rank `root` needs, or any other operator, use
+[`global_reduce`](@ref)/[`global_allreduce`](@ref) directly.
 """
 global_sum(topology_or_grid, val) = global_allreduce(topology_or_grid, val, +)
 global_max(topology_or_grid, val) = global_allreduce(topology_or_grid, val, max)
 global_min(topology_or_grid, val) = global_allreduce(topology_or_grid, val, min)
+
+# MPI's MAX/MIN need not propagate NaN (Open MPI drops it), so a diverged rank
+# could pass a residual or CFL check. Reduce a NaN flag in the same message
+# instead of a second Allreduce, and without a custom op (unsupported on aarch64).
+global_max(topology_or_grid, val::AbstractFloat) = nan_aware_extremum(topology_or_grid, val, max)
+global_min(topology_or_grid, val::AbstractFloat) = nan_aware_extremum(topology_or_grid, val, min)
+function nan_aware_extremum(topology_or_grid, val::T, op) where {T<:AbstractFloat}
+    # The flag is +1 under max and -1 under min, so `op` selects it on any NaN rank.
+    flag = isnan(val) ? (op === max ? one(T) : -one(T)) : zero(T)
+    v, f = global_allreduce(topology_or_grid, [val, flag], op)
+    return iszero(f) ? v : T(NaN)
+end
 
 @doc (@doc global_sum) global_max
 @doc (@doc global_sum) global_min
@@ -81,10 +94,15 @@ runs on whatever backend `A` already lives on, then one cross-rank
 pre-reduce as the other functions here do. `p=Inf` computes the global
 maximum absolute value instead (the ℓ∞ norm) via `global_max`, since *that*
 one is directly combinable, and since the general `sum(abs(x)^p, A)` formula
-is not numerically meaningful at `p=Inf`.
+is not numerically meaningful at `p=Inf`. `p=-Inf` gives the global minimum
+absolute value. Other `p <= 0` are rejected. Integer data is converted to
+floating point before powering, so it cannot overflow.
 """
 function global_norm(topology::Topology, A, p::Real = 2)
-    isinf(p) && return global_max(topology, maximum(abs, A))
-    return global_allreduce(topology, sum(x -> abs(x)^p, A), +)^(1 / p)
+    p == Inf && return global_max(topology, float(maximum(abs, A)))
+    p == -Inf && return global_min(topology, float(minimum(abs, A)))
+    p > 0 || throw(ArgumentError("global_norm needs p > 0 or p = ±Inf; got p=$p."))
+    # `float` first: `abs(x)^p` overflows for integer eltypes (Int8[100] gives 16).
+    return global_allreduce(topology, sum(x -> abs(float(x))^p, A), +)^(1 / p)
 end
 global_norm(grid::Grid, A, p::Real = 2) = global_norm(grid.topology, A, p)

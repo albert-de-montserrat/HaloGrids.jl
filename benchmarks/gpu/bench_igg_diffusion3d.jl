@@ -153,7 +153,7 @@ end
     CUDA.synchronize()
 
     numel = nx * ny * nz
-    teff = t_eff_gbs(2, 1, numel, sizeof(Float64), stats.time / niter)
+    teff = t_eff_gbs(1, 1, numel, sizeof(Float64), stats.time / niter)
     peakbw = me == 0 ? measure_peak_bandwidth_gbs() : 0.0
 
     if me == 0

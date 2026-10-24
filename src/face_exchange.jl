@@ -55,10 +55,10 @@ end
 @inline function post_face_recvs!(cache, fields::Tuple, grid_dims, dim, lo, hi, comm, i)
     f = fields[1]
     len = face_length(f, grid_dims, dim)
-    has_neighbor(lo) && (cache.reqs[i, 1, 1] = MPI.Irecv!(mpi_recvbuf(cache, i, 1, eltype(f), len, f.data),
-        comm; source=lo, tag=face_tag(dim, 2)))
-    has_neighbor(hi) && (cache.reqs[i, 2, 1] = MPI.Irecv!(mpi_recvbuf(cache, i, 2, eltype(f), len, f.data),
-        comm; source=hi, tag=face_tag(dim, 1)))
+    has_neighbor(lo) && MPI.Irecv!(mpi_recvbuf(cache, i, 1, eltype(f), len, f.data),
+        comm, cache.reqs[i, 1, 1]; source=lo, tag=face_tag(dim, 2))
+    has_neighbor(hi) && MPI.Irecv!(mpi_recvbuf(cache, i, 2, eltype(f), len, f.data),
+        comm, cache.reqs[i, 2, 1]; source=hi, tag=face_tag(dim, 1))
     post_face_recvs!(cache, Base.tail(fields), grid_dims, dim, lo, hi, comm, i + 1)
     return nothing
 end
@@ -69,13 +69,13 @@ end
     len = face_length(f, grid_dims, dim)
     if has_neighbor(lo)
         stage_send!(cache, i, 1, eltype(f), len, f.data)
-        cache.reqs[i, 1, 2] = MPI.Isend(mpi_sendbuf(cache, i, 1, eltype(f), len, f.data),
-            comm; dest=lo, tag=face_tag(dim, 1))
+        MPI.Isend(mpi_sendbuf(cache, i, 1, eltype(f), len, f.data),
+            comm, cache.reqs[i, 1, 2]; dest=lo, tag=face_tag(dim, 1))
     end
     if has_neighbor(hi)
         stage_send!(cache, i, 2, eltype(f), len, f.data)
-        cache.reqs[i, 2, 2] = MPI.Isend(mpi_sendbuf(cache, i, 2, eltype(f), len, f.data),
-            comm; dest=hi, tag=face_tag(dim, 2))
+        MPI.Isend(mpi_sendbuf(cache, i, 2, eltype(f), len, f.data),
+            comm, cache.reqs[i, 2, 2]; dest=hi, tag=face_tag(dim, 2))
     end
     post_face_sends!(cache, Base.tail(fields), grid_dims, dim, lo, hi, comm, i + 1)
     return nothing
@@ -142,36 +142,20 @@ end
 @inline unique_face_dims(dims::Tuple) =
     !contains_dim(dims[1], Base.tail(dims)) && unique_face_dims(Base.tail(dims))
 
-@inline check_face_widths(fields::Tuple{}, dims) = nothing
-@inline function check_face_widths(fields::Tuple, dims)
-    check_face_widths_in_dims(fields[1], dims)
-    check_face_widths(Base.tail(fields), dims)
-    return nothing
-end
-@inline check_face_widths_in_dims(f, ::Tuple{}) = nothing
-@inline function check_face_widths_in_dims(f, dims::Tuple)
-    d = dims[1]
-    3f.halowidths[d] <= size(f.data, d) || error(
-        "face exchange needs at least halowidths[$d] owned cells in dimension $d; " *
-        "need 3*halowidths[$d] <= size(data,$d).")
-    check_face_widths_in_dims(f, Base.tail(dims))
-    return nothing
-end
-
 function _halo_exchange_start!(g::Grid{N}, fields::Tuple, dims::Tuple, ::Val{:faces}) where {N}
     g.excache.pending && error("a halo exchange is already in flight on this grid; finish it first.")
     check_fields(g, fields)
-    dims isa Tuple{Vararg{Integer}} || error("face exchange dims must contain integer indices.")
     check_dims(Val(N), dims)
     unique_face_dims(dims) || error("face exchange dims must not repeat; got dims=$dims.")
-    check_face_widths(fields, dims)
+    check_widths(g.topology, fields, dims)
     ensure_capacity!(g.excache, N * length(fields))
-    g.excache.pending = true
+    epoch = begin_exchange!(g.excache)
     start_face_dims!(g, fields, dims)
-    return ExchangeHandle{N,typeof(fields),typeof(dims)}(g, fields, 0, false, dims)
+    return ExchangeHandle{N,typeof(fields),typeof(dims)}(g, fields, 0, false, dims, epoch)
 end
 
 function halo_exchange_finish!(handle::ExchangeHandle{N,F,D}) where {N,F,D<:Tuple}
+    check_handle(handle)
     finish_face_dims!(handle.grid, handle.fields, handle.dims)
     handle.grid.excache.pending = false
     return nothing

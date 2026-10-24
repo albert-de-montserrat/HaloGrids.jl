@@ -25,15 +25,12 @@
 #      built before a resize would otherwise reference stale memory after one.
 #      Measured saving: ~3840 B/call for the 2-field/2-dim setup below (see
 #      REDESIGN_PLAN.md's GPU allocation audit for the before/after).
-#   2. ~1000-1200 B extra whenever a device `copyto!` has a non-contiguous
-#      (strided) source or destination — i.e. any halo pack/unpack in a
-#      dimension other than the array's leading one — versus ~112 B for a
-#      contiguous device copy. GPUArrays.jl falls back to its generic
-#      broadcast-kernel machinery for strided data; the exact same call
-#      (`copyto!(buf, view(A, ranges...))`, unmodified) measures 0 B on the
-#      CPU path. Not addressed here: fixing it would need a hand-rolled
-#      packing kernel, which this extension has deliberately avoided needing
-#      so far (see src/CUDAExt/halo_exchange.jl).
+#   2. A device `copyto!` with a non-contiguous (strided) source or
+#      destination goes through GPUArrays.jl's generic broadcast machinery:
+#      ~2.3 KB per call on CUDA.jl 6.3 (~1-1.2 KB on older versions) versus
+#      ~112 B for a contiguous copy. Addressed: strided slabs now use a
+#      one-line copy kernel (~670 B, CUDA.jl's own launch cost; see
+#      src/CUDAExt/halo_exchange.jl).
 #
 # Total scales with the number of pack/unpack/self-periodic-copy operations
 # per call (~field count x dimension count x 2 directions), not with array
@@ -114,13 +111,12 @@ function run_gpu_allocation_tests()
         @testset "GPU steady-state allocation bound (nprocs=$nprocs, gpu_aware_mpi=$gpu_aware_mpi)" begin
             if nprocs == 1
                 # Self-periodic only (no real MPI transport): isolates the
-                # view-caching-reduced CuArray-wrapper-construction +
-                # strided-copy floor described above. Measured a stable
-                # 14336 B/call for this 2-field/2-dim setup (down from 18176
-                # before view caching) — tighter bound than nprocs>1 since this
-                # case has no real transport noise to allow for.
-                @test bytes_per_update < 20000
-                @test bytes_per_pair < 20000
+                # CuArray-wrapper + copy floor described above. Measured a stable
+                # 8448 B/call for this 2-field/2-dim setup on CUDA.jl 6.3 (23296
+                # with the broadcast copyto! for strided slabs) — tighter bound
+                # than nprocs>1 since this case has no transport noise.
+                @test bytes_per_update < 12000
+                @test bytes_per_pair < 12000
             else
                 # Real device<->host staging + MPI Isend/Irecv/Wait transport is
                 # also in play now, and genuinely noisy run-to-run (observed

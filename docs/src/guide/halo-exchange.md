@@ -69,10 +69,12 @@ boundary slabs after finishing, and keep input fields unchanged throughout.
 For larger stencil radii, shrink the inner box accordingly.
 
 Peers must use matching regions, dimensions, field order, types, halo widths,
-and compatible slab sizes. Face mode rejects repeated dimensions and requires
-at least the halo width of owned cells in each requested dimension:
-`3*halowidths[d] <= size(data,d)`. Diagonal stencils and mixed derivatives that
-read edges or corners require `region=:full`. Both modes share the same
+and compatible slab sizes. Face mode rejects repeated dimensions. Both modes
+require `overlaps[d] + halowidths[d] <= size(data,d)` in each requested
+dimension (`3*halowidths[d]` with default overlaps), so the sent strip holds
+only owned cells. Dimensions with a single rank and no periodicity are
+exempt. Diagonal stencils and mixed derivatives that read edges or corners
+require `region=:full`. Both modes share the same
 one-pending-exchange-per-grid guard. More pending dimensions permit broader
 overlap, but do not guarantee that MPI progresses during computation.
 
@@ -140,11 +142,13 @@ The macro expands this into the following schedule:
 6. Launch `update_temperature!` over the inner box.
 7. Finish the exchange in a `finally` clause.
 
-Without `boundary_width=...`, the macro uses the componentwise maximum halo
-width of its fields. This is the smallest naturally inferred safe width. An
-explicit larger value is a tuning parameter: it increases the work completed
-before communication and reduces the inner work available for overlap. It
-does not alter `Field.halowidths`, MPI message sizes, or the computed result.
+Without `boundary_width=...`, the macro uses the componentwise maximum of its
+fields' `overlaps - halowidths` (the halo width, for default overlaps): the
+depth of the strip that is sent. This is the smallest safe width. An explicit
+larger value is a tuning parameter: it increases the work completed before
+communication and reduces the inner work available for overlap. It does not
+alter `Field.halowidths`, MPI message sizes, or the computed result. A smaller
+value sends cells before the kernel has updated them.
 For `(16, 2, 2)`, overlap requires at least 33 points in the x range and at
 least 5 in the y/z ranges. If any range length is at most twice its width,
 the macro runs the full kernel, applies the boundary updates, synchronizes,

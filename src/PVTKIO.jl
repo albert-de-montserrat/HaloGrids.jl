@@ -45,7 +45,7 @@ This is a stub method: calling it without `WriteVTK` loaded raises this
 error rather than a bare `MethodError`. Loading `WriteVTK` (`using WriteVTK`)
 resolves the call to `HaloGridsWriteVTKExt`'s implementation via ordinary
 multiple dispatch — the same "declare a stub in core, add methods from the
-extension" pattern as [`save_hdf5`](@ref) and `is_cuarray`/`is_rocarray` in
+extension" pattern as [`save_hdf5`](@ref) and `pack_target` in
 `backend.jl` — so no `Base.get_extension` lookup is needed at the call site.
 
 See the "Parallel ParaView (pvtk) I/O" guide for the on-disk layout, the
