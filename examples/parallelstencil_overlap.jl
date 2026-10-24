@@ -33,16 +33,17 @@ function main()
     @synchronize
     update_halo!(g, reference)
 
-    # Compute output boundaries first, then exchange output while computing
-    # its inner region. A is a separate, already exchanged input array.
+    # On a device backend: compute output boundaries first, then exchange
+    # output while computing its inner region. A is a separate, already
+    # exchanged input array. This file's Threads backend always takes the
+    # blocking schedule, so it shows the macro's usage and result only.
     @hide_halo_communication g output boundary_width=(b, b) begin
         @parallel ranges jacobi_step!(B, A)
     end
     @synchronize
     @assert B == Bref
 
-    mode = N - 2 > 2b ? "outer/inner split" : "blocking fallback"
-    t.rank == 0 && println("$mode matches the blocking reference on $(prod(t.dims)) rank(s).")
+    t.rank == 0 && println("@hide_halo_communication matches the blocking reference on $(prod(t.dims)) rank(s).")
 end
 
 MPI.Init()

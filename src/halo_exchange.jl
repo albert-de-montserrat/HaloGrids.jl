@@ -31,6 +31,12 @@ boundary updates, synchronizes, and performs a blocking `update_halo!`.
 ParallelStencil's automatic partitioner also
 requires every range to start at `1`.
 
+The macro takes the same blocking schedule whenever the calling module
+initialized ParallelStencil with a CPU backend (`Threads` or `Polyester`), as
+ParallelStencil's own `@hide_communication` does. CPU kernel launches are
+synchronous, and the thin outer slabs cost more than the final dimension's
+exchange can hide. Widths and ranges are still validated.
+
 The boundary statements must update only data outside the inner box and must
 not depend on unfinished inner values. They run before packing and are useful
 for physical boundary conditions. Halo exchange then overwrites provisional
@@ -41,7 +47,7 @@ can overlap the inner launch; earlier dimensions finish synchronously.
 macro hide_halo_communication(args...)
     ext = Base.get_extension(HaloGrids, :HaloGridsParallelStencilExt)
     ext === nothing && error("@hide_halo_communication requires ParallelStencil")
-    return ext.hide_halo_communication_expr(args...)
+    return ext.hide_halo_communication_expr(__module__, args...)
 end
 
 """

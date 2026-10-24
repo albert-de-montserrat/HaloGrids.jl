@@ -94,7 +94,8 @@ Loading ParallelStencil enables `@hide_halo_communication`, which computes
 outer kernel slabs before exchange and an inner box while communication is
 pending. `boundary_width=(bx, by, bz)` gives the computation thickness at
 **each side** of each dimension. It leaves `Field.halowidths` and message sizes
-unchanged. Small launch ranges use a full-kernel, blocking-exchange fallback.
+unchanged. Small launch ranges and CPU backends (`Threads`, `Polyester`) use a
+full-kernel, blocking-exchange fallback.
 See [hiding communication and boundary widths](docs/src/guide/hide-communication.md)
 for sketches, safe kernel patterns, and worked `32³`/`64³` examples.
 

@@ -3,6 +3,9 @@ using MPI
 using HaloGrids
 using ParallelStencil
 @init_parallel_stencil(Threads, Float64, 3)
+# The public macro runs blocking on CPU backends; the internal split macro
+# keeps the overlap schedule covered on Threads.
+const PSExt = Base.get_extension(HaloGrids, :HaloGridsParallelStencilExt)
 
 @parallel_indices (i, j, k) function increment_owned!(A)
     A[i + 1, j + 1, k + 1] += i + 10j + 100k
@@ -14,6 +17,7 @@ end
 module TwoDimensionalTests
 using Test, MPI, HaloGrids, ParallelStencil
 @init_parallel_stencil(Threads, Float64, 2)
+const PSExt = Base.get_extension(HaloGrids, :HaloGridsParallelStencilExt)
 
 @parallel_indices (i, j) function increment_owned!(A)
     A[i + 1, j + 1] += i + 10j
@@ -33,7 +37,7 @@ function run_tests()
                 @parallel ranges increment_owned!(B)
                 @synchronize
                 update_halo!(g, reference)
-                @hide_halo_communication g f boundary_width=(b, b) begin
+                PSExt.@hide_halo_communication_split g f boundary_width=(b, b) begin
                     @parallel ranges increment_owned!(A)
                 end
                 @synchronize
@@ -43,7 +47,7 @@ function run_tests()
             @parallel ranges increment_owned!(B)
             @synchronize
             update_halo!(g, reference)
-            @hide_halo_communication g f begin
+            PSExt.@hide_halo_communication_split g f begin
                 @parallel ranges increment_owned!(A)
             end
             @synchronize
@@ -66,7 +70,7 @@ function run_tests()
             @parallel ranges increment_owned!(reference.data)
             @synchronize
             update_halo!(g, reference)
-            @hide_halo_communication g f begin
+            PSExt.@hide_halo_communication_split g f begin
                 @parallel ranges increment_owned!(f.data)
             end
             @synchronize
@@ -96,7 +100,7 @@ MPI.Init()
             B[1, :, :] .= -7
             @synchronize
             update_halo!(g, reference)
-            @hide_halo_communication g f boundary_width=widths begin
+            PSExt.@hide_halo_communication_split g f boundary_width=widths begin
                 @parallel ranges increment_owned!(A)
                 A[1, :, :] .= -7
                 boundary_calls[] += 1
@@ -109,11 +113,42 @@ MPI.Init()
         @parallel ranges increment_owned!(B)
         @synchronize
         update_halo!(g, reference)
-        @hide_halo_communication g f begin
+        PSExt.@hide_halo_communication_split g f begin
             @parallel ranges increment_owned!(A)
         end
         @synchronize
         @test A == B
+    end
+end
+
+@testset "public macro is blocking on a CPU backend" begin
+    @test !PSExt.split_backend(@__MODULE__)
+    t = topology((0, 0, 0); periods=(true, true, true))
+    n = 32
+    g = grid(t, (n, n, n))
+    f = field(fill(Float64(t.rank), n, n, n); halowidths=(1, 1, 1))
+    reference = field(copy(f.data); halowidths=(1, 1, 1))
+    ranges = (1:n-2, 1:n-2, 1:n-2)
+    # Boundary statements run after the full kernel when blocking, but before
+    # the inner box when split, so they see whether the center was updated.
+    c = n ÷ 2
+    for _ in 1:2
+        @parallel ranges increment_owned!(reference.data)
+        @synchronize
+        update_halo!(g, reference)
+        center = Ref(NaN)
+        @hide_halo_communication g f boundary_width=(2, 2, 2) begin
+            @parallel ranges increment_owned!(f.data)
+            center[] = f.data[c, c, c]
+        end
+        @synchronize
+        @test center[] == reference.data[c, c, c]
+        @test f.data == reference.data
+        @test !g.excache.pending
+    end
+    # Widths and ranges are still validated on the blocking path.
+    @test_throws ArgumentError @hide_halo_communication g f boundary_width=(0, 1, 1) begin
+        @parallel ranges increment_owned!(f.data)
     end
 end
 TwoDimensionalTests.run_tests()

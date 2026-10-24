@@ -17,7 +17,19 @@ function can_overlap(widths, ranges)
     return all(d -> length(ranges[d]) > 2 * widths[d], eachindex(ranges))
 end
 
-function hide_halo_communication_expr(args...)
+# CPU kernel launches are synchronous, so the split only adds thin-slab launches
+# (measured 10-50% slower than blocking for the CPU diffusion benchmark).
+# ParallelStencil's own CPU `@hide_communication` likewise runs its block as is.
+split_backend(caller::Module) =
+    !ParallelStencil.ParallelKernel.iscpu(ParallelStencil.get_package(caller))
+
+# Internal: always split, whatever the backend. Lets the Threads-backend tests
+# cover the split schedule.
+macro hide_halo_communication_split(args...)
+    return hide_halo_communication_expr(__module__, args...; split=true)
+end
+
+function hide_halo_communication_expr(caller::Module, args...; split::Bool=split_backend(caller))
     block = args[end]
     positional = collect(args[1:end-1])
     kw = findfirst(x -> x isa Expr && x.head == :(=) && x.args[1] == :boundary_width, positional)
@@ -35,7 +47,7 @@ function hide_halo_communication_expr(args...)
     return esc(quote
         $widths = $width_expr
         $launch_ranges = $ranges
-        if !$(GlobalRef(@__MODULE__, :can_overlap))($widths, $launch_ranges)
+        if !$(GlobalRef(@__MODULE__, :can_overlap))($widths, $launch_ranges) || !$split
             ParallelStencil.@parallel $launch_ranges $kernel
             $(boundary_updates...)
             ParallelStencil.@synchronize

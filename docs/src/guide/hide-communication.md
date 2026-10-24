@@ -7,6 +7,10 @@ exchange is pending. `boundary_width=(bx, by, bz)` specifies how many
 The widths describe a computation split; the exchanged halo thickness still
 comes from `Field.halowidths`.
 
+The split applies to device backends such as CUDA and AMDGPU. With a CPU
+backend (`Threads` or `Polyester`), the macro always takes the blocking
+schedule; see [CPU backends run blocking](#cpu-backends-run-blocking).
+
 Loading `ParallelStencil` activates this optional macro. The underlying
 `halo_exchange_start!` / `halo_exchange_finish!` API also works without
 ParallelStencil; see [Halo exchange](./halo-exchange.md).
@@ -186,10 +190,26 @@ at any rank count and does not silently reduce the requested width. Invalid
 widths or ranges that do not start at `1` still raise an error.
 
 The fallback is selected by local launch size, not communicator size. On one
-rank, a sufficiently large range still uses the split schedule. There is no
+rank, a sufficiently large range on a device backend still uses the split
+schedule. There is no
 inter-rank network transfer: periodic dimensions use local copies, and
 nonperiodic sides without neighbors receive nothing. Splitting may therefore
 add overhead without a communication benefit on one rank.
+
+## CPU backends run blocking
+
+When the calling module initialized ParallelStencil with `Threads` or
+`Polyester`, the macro uses the blocking schedule above for every launch
+size. ParallelStencil's own `@hide_communication` makes the same choice on CPU.
+Widths and ranges are still validated, and the result is the same.
+
+CPU kernel launches are synchronous, so the inner launch cannot start until
+the outer slabs finish, and MPI may not progress during computation. The
+`Threads` backend distributes each launch over its last dimension, so a z
+slab of width `bz` occupies at most `bz` threads, and narrow x slabs access
+memory with a large stride. In the CPU diffusion benchmark (local `128³`,
+4 threads per rank, 1-4 ranks on one 16-core machine), the split ran 10-50%
+slower than the blocking step. Exchange took 0.1-0.2 ms of a 3-8 ms step.
 
 ## Worked sizes: local 32³ and 64³ arrays
 
@@ -269,9 +289,11 @@ julia --project=<env> --startup-file=no examples/parallelstencil_overlap.jl 32 2
 ```
 
 The arguments are the local side length including halos and the computation
-width used in both dimensions. To exercise the fallback, use `6 2`: the
-launch is `4 × 4`, with `4 == 2*2`. Use `32 2` for a split with a `26 × 26`
-inner box. For four MPI ranks, with an MPI launcher available:
+width used in both dimensions. The example uses the `Threads` backend, so it
+always runs the blocking schedule. With a device backend, `6 2` would take the
+small-range fallback (the launch is `4 × 4`, with `4 == 2*2`), and `32 2` would
+split with a `26 × 26` inner box. For four MPI ranks, with an MPI launcher
+available:
 
 ```sh
 mpiexec -n 4 julia --project=<env> --startup-file=no examples/parallelstencil_overlap.jl 32 2
